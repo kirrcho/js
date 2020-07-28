@@ -1,0 +1,418 @@
+﻿<style>
+    #origin {
+        background-color: #5e8fca;
+        width: 600px;
+        height: 600px;
+        position: absolute;
+    }
+
+    #game-origin {
+        width: 282px;
+        height: 532px;
+        margin: 5px 15px 0px 15px;
+        border: 2px solid black;
+        background-color: #e1e1e1;
+        position: absolute;
+    }
+
+    #block-preview {
+        width: 200px;
+        height: 100px;
+        margin: 5px 10px 0px 340px;
+        border: 2px solid black;
+        position: absolute;
+    }
+
+    #stats {
+        width: 200px;
+        height: 156px;
+        margin: 155px 10px 0px 340px;
+        position: absolute;
+    }
+
+    #level-origin, #score-origin, #lines-origin {
+        position: absolute;
+        width: 200px;
+        height: 50px;
+        border: 2px solid black;
+        font: 30px bold;
+    }
+
+    #score-origin {
+        margin-top: 55px;
+    }
+
+    #lines-origin {
+        margin-top: 110px;
+    }
+
+    .block {
+        width: 26px;
+        height: 26px;
+        border: 1px solid black;
+        position: absolute;
+    }
+
+    .row {
+        height: 28px;
+    }
+
+    #blocks {
+        position: absolute;
+        margin-left: -3px;
+        margin-top: -3px;
+    }
+
+    .current {
+        background-color: black;
+    }
+
+    .filled {
+        background-color: black;
+    }
+</style>
+<div id="origin">
+    <div id="game-origin">
+        <table id="game">
+            <tbody id="blocks"></tbody>
+        </table>
+    </div>
+    <div id="block-preview">
+
+    </div>
+    <div id="stats">
+        <div id="level-origin">
+            Level:
+        </div>
+        <div id="score-origin">
+            Score:
+        </div>
+        <div id="lines-origin">
+            Lines   :
+        </div>
+    </div>
+</div>
+
+<script>
+    const Score_To_Level_Up = 500;
+    const Ratio_In_Speeding = 1.1;
+    const Rows_In_Game = 18;
+    const Cols_In_Game = 10;
+
+    $(document).ready(function () {
+        createGrid();
+        startGame();
+    });
+
+    function startGame() {
+        setMovements();
+
+        let blocks = getDifferentBlocks();
+        start(blocks, 1000, 0);
+    }
+
+    function setMovements() {
+        let lastKeyUpAt = 0;
+        let stopTrigger = null;
+
+        $(document).on('keyup', e => {
+            lastKeyUpAt = new Date();
+            stopTrigger = null;
+        });
+
+        $(document).on('keydown', e => {
+            if (!stopTrigger) {
+                //r
+                if (e.keyCode == 82) {
+                    let blocks = getDifferentBlocks();
+                    let currentType = blocks[localStorage.getItem('startingBlockIndex')];
+
+                    let rotationCounter = localStorage.getItem('rotationCounter');
+                    rotationCounter = rotationCounter ? rotationCounter : 0;
+                    rotationCounter = ++rotationCounter % currentType.length;
+                    let colPosition = +localStorage.getItem('colPosition');
+
+                    for (let squares of currentType[rotationCounter]) {
+                        if (squares[1] + colPosition < 1 || squares[1] + colPosition > Cols_In_Game) {
+                            return;
+                        }
+                    }
+
+                    localStorage.setItem('rotationCounter', rotationCounter);
+
+                    let rowPosition = +localStorage.getItem('rowPosition');
+
+                    $('.current').removeClass('current');
+
+                    for (let square of currentType[rotationCounter]) {
+                        $(`#${square[0] + rowPosition}_${square[1] + colPosition}`).addClass('current');
+                    }
+
+                    stopTrigger = "fasd";
+                }
+                // escape
+                else if (e.keyCode == 27) {
+
+                }
+                // left
+                else if (e.keyCode == 37) {
+                    for (let square of $('.current')) {
+                        if (square.id.split('_')[1] <= 1) {
+                            return;
+                        }
+                    }
+                    moveBlockLeftOrRight(true);
+                }
+                // right
+                else if (e.keyCode == 39) {
+                    for (let square of $('.current')) {
+                        if (square.id.split('_')[1] >= Cols_In_Game) {
+                            return;
+                        }
+                    }
+                    moveBlockLeftOrRight(false);
+                }
+                // down
+                else if (e.keyCode == 40) {
+                    let intervalId = localStorage.getItem("intervalId");
+                    clearInterval(intervalId);
+
+                    if (restartIfNeeded()) {
+                        return;
+                    }
+                    moveBlockDown();
+                    let keyDownAt = new Date();
+
+                    setTimeout(function () {
+                        if (+keyDownAt > +lastKeyUpAt) {
+                            let interval = setInterval(function () {
+                                if (+keyDownAt > +lastKeyUpAt) {
+                                    if (restartIfNeeded()) {
+                                        return;
+                                    }
+                                    moveBlockDown();
+                                }
+                            }, 150);
+
+                            clearInterval(interval);
+                        }
+                    }, 300);
+
+                    startNormalInterval(1000);
+                }
+            }
+        })
+
+    }
+
+    function updateScore(rowsCompleted) {
+        let score = +$('#score-origin');
+
+    }
+
+    function increaseDifficultyByLevel() {
+        
+    }
+
+    function start(blocks, miliseconds, score) {
+        if (score > Score_To_Level_Up) {
+            score -= Score_To_Level_Up;
+            miliseconds /= Ratio_In_Speeding;
+        }
+
+        let intervalId = localStorage.getItem("intervalId");
+        clearInterval(intervalId);
+
+        if ($('.current').length < 1) {
+            addStartingBlock(blocks);
+        }
+
+        localStorage.setItem('rowPosition', '0');
+        localStorage.setItem('colPosition', '0');
+
+        //FIX SECONDS !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        startNormalInterval(1000);
+    }
+
+    function startNormalInterval(miliseconds) {
+
+        let interval = setInterval(() => {
+            if (restartIfNeeded()) {
+                return;
+            }
+
+            moveBlockDown();
+
+            let rowPosition = +localStorage.getItem('rowPosition');
+            rowPosition++;
+        }, miliseconds);
+
+        localStorage.setItem("intervalId", interval);
+    }
+
+    function restartIfNeeded(miliseconds, score) {
+        let block = findBlock();
+
+        for (let position of block) {
+            let currentRow = position[0];
+            let currentCol = position[1];
+            if (currentRow > Rows_In_Game - 1 || $(`#${currentRow + 1}_${currentCol}`).hasClass("filled")) {
+                $('.current').addClass('filled');
+                $('.current').removeClass('current');
+
+                let rows = [];
+                for (let pos of block) {
+                    if (!rows.find(p => p == pos[0])) {
+                        rows.push(pos[0]);
+                    }
+                }
+                clearFinishedLines(rows);
+
+                miliseconds = miliseconds ? miliseconds : 1000;
+                score = score ? score : 0;
+                localStorage.removeItem('rowPosition');
+                localStorage.removeItem('colPosition');
+                localStorage.removeItem('rotationCounter');
+                start(getDifferentBlocks(), miliseconds, score);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function addStartingBlock(blocks) {
+        let number = Math.floor(Math.random() * blocks.length);
+        let startingBlock = blocks[number];
+
+        localStorage.setItem('startingBlockIndex', number);
+
+        for (let square of startingBlock[0]) {
+            $(`#${square[0]}_${square[1]}`).addClass('current');
+        }
+    }
+
+    function findBlock() {
+        let positions = $('.current');
+        let block = [];
+
+        for (let position of positions) {
+            let arr = position.id.split('_');
+            block.push([+arr[0], +arr[1]]);
+        }
+
+        block.reverse()
+
+        return block;
+    }
+
+    function moveBlockDown(block) {
+        if (!block) {
+            block = findBlock();
+        }
+        for (let square of block) {
+            $(`#${square[0]}_${square[1]}`).removeClass('current');
+            $(`#${square[0] + 1}_${square[1]}`).addClass('current');
+        }
+
+        let position = +localStorage.getItem('rowPosition') + 1;
+        localStorage.setItem('rowPosition', `${position}`);
+    }
+
+    function clearFinishedLines(rowsToCheck) {
+        let $blocks = $('.filled');
+        let rowsToClear = [];
+
+        for (let row of rowsToCheck) {
+            let count = 0;
+            for (let square of $blocks) {
+                if (square.id.split('_')[0] == row) {
+                    count++;
+                }
+            }
+            if (count >= Cols_In_Game) {
+                rowsToClear.push(row);
+            }
+        }
+
+        rowsToClear.sort((a, b) => a - b);
+
+        for (let row of rowsToClear) {
+            for (let i = 0; i < Cols_In_Game; i++) {
+                $(`#${row}_${i}`).removeClass('filled');
+            }
+        }
+
+        for (let row of rowsToClear) {
+            let ids = [];
+            for (let block of $('.filled')) {
+                let id = block.id.split('_');
+                ids.push([id[0],id[1]]);
+            }
+            ids.sort((b, a) => a[0] - b[0]);
+
+            for (let id of ids) {
+                if (id[0] < row) {
+                    $(`#${id[0]}_${id[1]}`).removeClass('filled');
+                    $(`#${+id[0] + 1}_${id[1]}`).addClass('filled');
+                }
+            }
+        }
+    }
+
+    function moveBlockLeftOrRight(isLeft) {
+        let block = findBlock();
+        let direction = 1;
+
+        if (isLeft) {
+            direction = -1;
+            block.reverse();
+        }
+
+        for (let square of block) {
+            if ($(`#${square[0]}_${square[1] + direction}`).hasClass('filled')) {
+                return;
+            }
+        }
+
+        for (let square of block) {
+            $(`#${square[0]}_${square[1]}`).removeClass('current');
+            $(`#${square[0]}_${square[1] + direction}`).addClass('current');
+        }
+        let position = +localStorage.getItem('colPosition');
+        localStorage.setItem('colPosition', position + direction);
+    }
+
+    function createGrid() {
+        let output = "";
+        for (let i = 0; i < 2; i++) {
+            output += `<tr class="row" style="display:none">`;
+            for (let k = 0; k < Cols_In_Game; k++) {
+                output += `<td class="block" style="margin-left:0px" id="${i - 1}_${k + 1}">`;
+            }
+            output += `</tr>`;
+        }
+        for (let i = 0; i < Rows_In_Game; i++) {
+            output += `<tr class="row">`;
+            for (let k = 0; k < Cols_In_Game; k++) {
+                output += `<td class="block" style="margin-left:${k * 28}px" id="${i + 1}_${k + 1}">`;
+            }
+            output += `</tr>`;
+        }
+        $("#blocks").prepend(output);
+    }
+
+    function getDifferentBlocks() {
+        let blocks = [];
+
+        blocks[0] = [[[1, 6], [1, 5], [1, 7], [2, 6]], [[1, 6], [0, 6], [2, 6], [1, 7]], [[1, 6], [0, 6], [1, 7], [1, 5]], [[1, 6], [1, 5], [0, 6], [2, 6]]];
+        blocks[1] = [[[1, 6], [1, 7], [2, 6], [2, 7]]];
+        blocks[2] = [[[1, 6], [1, 5], [1, 7], [1, 8]], [[1, 6], [0, 6], [-1, 6], [2, 6]]];
+        blocks[3] = [[[1, 6], [1, 5], [2, 5], [1, 7]], [[1, 6], [0, 6], [2, 6], [2, 7]], [[1, 6], [1, 5], [1, 7], [0, 7]], [[1, 6], [0, 6], [0, 5], [2, 6]]];
+        blocks[4] = [[[1, 6], [1, 5], [1, 7], [2, 7]], [[1, 6], [0, 6], [2, 6], [2, 5]], [[1, 6], [1, 5], [1, 7], [0, 5]], [[1, 6], [0, 6], [0, 7], [2, 6]]];
+        blocks[5] = [[[1, 6], [1, 5], [2, 6], [2, 7]], [[0, 7], [1, 7], [1, 6], [2, 6]]];
+        blocks[6] = [[[1, 6], [1, 7], [2, 6], [2, 5]], [[0, 6], [1, 6], [1, 7], [2, 7]]];
+
+        return blocks;
+    }
+
+</script>

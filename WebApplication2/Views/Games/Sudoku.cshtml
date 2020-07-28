@@ -1,0 +1,144 @@
+﻿@model List<WebApplication2.App.Models.SudokuBox>
+<div id="main" style="width:800px;height:800px;border:solid;border-width:5px;position:absolute;margin-left:300px">
+    <style>
+        .box {
+            position: absolute;
+            font-size: 30px;
+            text-align: center;
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+        }
+
+        .highlighted {
+            color: #ccbd1b
+        }
+    </style>
+
+    <div style="position:absolute;margin:20px 0px 0px 620px;font-size:50px" id="time" class="stopped">00:00</div>
+    <div style="position:absolute;margin:20px 0px 0px 352px;font-size:50px" id="error">No Error</div>
+    <div style="position:absolute;margin:20px 0px 0px 22px;font-size:50px" id="mistakes">Mistakes left: 3</div>
+    <div id="game" style="width:420px;height:420px;margin:100px 0px 0px 250px;line-snap:baseline;">
+        @foreach (var box in this.Model)
+        {
+            string styleToAdd = "";
+            if (box.Row == 0)
+            {
+                styleToAdd += "border-top:4px solid black;";
+            }
+            if (box.Col == 0)
+            {
+                styleToAdd += "border-left:4px solid black;";
+            }
+            if (box.Row % 3 == 2 && box.Col % 3 == 2)
+            {
+                <div id="@(box.Row)_@(box.Col)" class="box" onkeydown="return false;" contenteditable="true" style="border: 0.5px solid black;border-right:4px solid black;border-bottom:4px solid black;margin:@(box.Row * 42)px 0px 0px @(box.Col * 42)px;">@(box.Number)</div>
+            }
+            else if (box.Col % 3 == 2)
+            {
+                <div id="@(box.Row)_@(box.Col)" class="box" onkeydown="return false;" contenteditable="true" style="border: 0.5px solid black;border-right:4px solid black;margin:@(box.Row * 42)px 0px 0px @(box.Col * 42)px;@(styleToAdd)">@(box.Number)</div>
+            }
+            else if (box.Row % 3 == 2)
+            {
+                <div id="@(box.Row)_@(box.Col)" class="box" onkeydown="return false;" contenteditable="true" style="border: 0.5px solid black;border-bottom:4px solid black;margin:@(box.Row * 42)px 0px 0px @(box.Col * 42)px;@(styleToAdd)">@(box.Number)</div>
+            }
+            else
+            {
+                <div id="@(box.Row)_@(box.Col)" class="box" onkeydown="return false;" contenteditable="true" style="border: 0.5px solid black;margin:@(box.Row * 42)px 0px 0px @(box.Col * 42)px;@(styleToAdd)">@(box.Number)</div>
+            }
+        }
+    </div>
+    <script>
+        const Numbers_on_board = 23;
+        const Sudoku_keyCodes = [49, 50, 51, 52, 53, 54, 55, 56, 57, 8];
+
+        $(document).ready(function () {
+            CreateBoard();
+            createClock();
+        });
+
+        function CreateBoard() {
+            $boxes = $('.box:contains("0")');
+            $boxes.text(``);
+            $boxes.removeAttr('onkeydown');
+            $boxes.css('color', '#999696');
+            $boxes.on('keydown', e => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (Sudoku_keyCodes.filter(p => p == e.keyCode).length != 0) {
+                    if (e.keyCode == 8) {
+                        e.target.textContent = '';
+                    } else {
+                        e.target.textContent = e.key;
+                    }
+                    let data = [];
+                    for (var box of $('.box')) {
+                        let id = box.id.split('_');
+                        let value = +box.textContent;
+                        data.push({
+                            Row: id[0],
+                            Col: id[1],
+                            Value: value
+                        });
+                    }
+
+                    let json = JSON.stringify(data);
+                    $.ajax("/Games/Sudoku", {
+                        type: 'post',
+                        data: json,
+                        contentType: "application/json; charset=utf8"
+                    }).then(function (arr) {
+                        if (arr[0] == true) {
+                            $('#main').append('<h1>Win</h1>');
+                            let clockId = localStorage.getItem("clockId");
+                            clearInterval(clockId);
+                        }
+                        if (arr[1] == false) {
+                            $('#error').text("Error");
+                            let mistakes = $('#mistakes').text().split(' ');
+                            $('#mistakes').text(`Mistakes left: ${+mistakes[2] - 1}`);
+                        } else {
+                            $('#error').text("No Error");
+                        }
+                    });
+                }
+            })
+
+            $('.box').on('click', e => {
+                $('.box').css('background-color', 'white');
+                $('.highlighted').removeClass('highlighted');
+                let position = e.toElement.id.split('_');
+                for (var i = 0; i < 9; i++) {
+                    $(`#${position[0]}_${i}`).css('background-color', '#cbf7f6');
+                    $(`#${i}_${position[1]}`).css('background-color', '#cbf7f6');
+                    for (var box of $('.box')) {
+                        if (box.textContent == e.toElement.textContent) {
+                            $(`#${box.id}`).addClass('highlighted');
+                        }
+                    }
+                }
+                let row = +position[0];
+                let col = +position[1];
+                let highlightPositionsRow = [row % 3 != 2 ? 1 : -2, row % 3 != 0 ? -1 : 2];
+                let highlightPositionsCol = [col % 3 != 2 ? 1 : -2, col % 3 != 0 ? -1 : 2];
+                for (var i = 0; i < highlightPositionsRow.length; i++) {
+                    for (var k = 0; k < highlightPositionsCol.length; k++) {
+                        $(`#${row + highlightPositionsRow[i]}_${col + highlightPositionsCol[k]}`).css('background-color', '#cbf7f6');
+                    }
+                }
+            })
+        }
+
+
+        function createClock() {
+            let count = 0;
+            $('#time')[0].className = "running";
+            let clock = setInterval(function () {
+                count++;
+                $('#time')[0].textContent = `${Math.floor(count / 600)}${Math.floor((count % 600) / 60)}:${Math.floor((count % 60) / 10)}${(count % 60) % 10}`
+            }, 1000);
+
+            localStorage.setItem("clockId", clock);
+        }
+    </script>
+</div>
